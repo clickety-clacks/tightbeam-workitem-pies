@@ -1,0 +1,9 @@
+{
+  "source": "Example inventory. Replace this file before running.",
+  "items": [
+    {
+      "id": "example-item-id",
+      "group": "Example group"
+    }
+  ]
+}

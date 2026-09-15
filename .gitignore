@@ -1,0 +1,25 @@
+# Local inventory and data
+/groups.json
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.wal
+*.shm
+
+# Python and local environment files
+__pycache__/
+*.py[cod]
+*.tmp
+*.temp
+.env
+.env.*
+*.local
+
+# Local screenshots and generated captures
+*.png
+*.jpg
+*.jpeg
+*.webp
+screenshots/
