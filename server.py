@@ -34,6 +34,16 @@ def classify_turn(turn, _assignment_archetypes):
     return _archetype_name(turn.get('sessionArchetype'))
 
 
+def _description_record(record, source):
+    """Return a safe, display-only description and its non-sensitive source."""
+    value = record.get('summary')
+    if value is None or not str(value).strip():
+        value = record.get('description')
+    if value is None or not str(value).strip():
+        return 'No description recorded', 'No description recorded'
+    return str(value), source
+
+
 def read_snapshot(db_path, groups_path):
     groups_path = Path(groups_path).expanduser().resolve()
     db_path = Path(db_path).expanduser().resolve()
@@ -44,8 +54,10 @@ def read_snapshot(db_path, groups_path):
             inventory_path = groups_path.parent / inventory_path
         inventory = json.loads(inventory_path.resolve().read_text())
         membership = {r['id']: r.get('category', 'Ungrouped') for r in inventory}
+        descriptions = {r['id']: _description_record(r, 'Inventory summary') for r in inventory}
     else:
         membership = {r['id']: r['group'] for r in groups['items']}
+        descriptions = {r['id']: _description_record(r, 'Groups configuration') for r in groups['items']}
     ids = list(membership)
     if not ids:
         raise ValueError('No item IDs in the inventory')
@@ -112,6 +124,8 @@ def read_snapshot(db_path, groups_path):
     for item in items:
         wi = item['id']
         item['group'] = membership[wi]
+        item['description'], item['descriptionSource'] = descriptions.get(
+            wi, ('No description recorded', 'No description recorded'))
         item['stages'] = []
         its_turns = item_turns[wi]
         item['lastActivity'] = max((t['endedAt'] or t['startedAt'] or 0 for t in its_turns), default=0)

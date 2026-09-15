@@ -100,8 +100,8 @@ class ArchetypeClassificationTest(unittest.TestCase):
         self.groups.write_text(json.dumps({
             'source': 'fixture',
             'items': [
-                {'id': 'wi-fixture', 'group': 'Fixture'},
-                {'id': 'wi-single', 'group': 'Fixture'},
+                {'id': 'wi-fixture', 'group': 'Fixture', 'summary': 'Direct summary <unsafe>'},
+                {'id': 'wi-single', 'group': 'Fixture', 'description': 'Direct description'},
                 {'id': 'wi-two', 'group': 'Fixture'},
                 {'id': 'wi-empty', 'group': 'Fixture'},
             ],
@@ -118,6 +118,12 @@ class ArchetypeClassificationTest(unittest.TestCase):
             ['coder', 'default', 'orchestrator', 'reviewer-code', 'reviewer-spec', 'spec-writer', 'Unknown'],
         )
         self.assertEqual(items['wi-empty']['stages'], [])
+        self.assertEqual(items['wi-fixture']['description'], 'Direct summary <unsafe>')
+        self.assertEqual(items['wi-fixture']['descriptionSource'], 'Groups configuration')
+        self.assertEqual(items['wi-single']['description'], 'Direct description')
+        self.assertEqual(items['wi-single']['descriptionSource'], 'Groups configuration')
+        self.assertEqual(items['wi-two']['description'], 'No description recorded')
+        self.assertEqual(items['wi-two']['descriptionSource'], 'No description recorded')
         self.assertEqual([s['name'] for s in items['wi-single']['stages']], ['coder'])
         self.assertEqual([s['name'] for s in items['wi-two']['stages']], ['coder', 'reviewer-code'])
 
@@ -139,6 +145,24 @@ class ArchetypeClassificationTest(unittest.TestCase):
         self.assertEqual(stages['Unknown']['assignments'], 3)
         self.assertEqual(stages['Unknown']['returns'], 1)
         self.assertEqual(item['coordinationTurns'], 1)
+
+    def test_inventory_summary_is_the_display_description(self):
+        root = Path(self.tempdir.name)
+        inventory = root / 'inventory.json'
+        inventory.write_text(json.dumps([
+            {'id': 'wi-fixture', 'category': 'Fixture', 'summary': 'Inventory summary'},
+            {'id': 'wi-empty', 'category': 'Fixture'},
+        ]))
+        groups = root / 'inventory-groups.json'
+        groups.write_text(json.dumps({
+            'source': 'inventory fixture',
+            'inventoryPath': inventory.name,
+        }))
+        snapshot = read_snapshot(self.db, groups)
+        items = {item['id']: item for item in snapshot['items']}
+        self.assertEqual(items['wi-fixture']['description'], 'Inventory summary')
+        self.assertEqual(items['wi-fixture']['descriptionSource'], 'Inventory summary')
+        self.assertEqual(items['wi-empty']['description'], 'No description recorded')
 
 
 if __name__ == '__main__':
