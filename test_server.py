@@ -59,6 +59,8 @@ class ArchetypeClassificationTest(unittest.TestCase):
                 # Unknown holder archetype plus an explicit review link falls back to Code review.
                 ('a-review', 'wi-fixture', 's-unknown', 'reviewer', 'a-coder', 4, 'closed'),
                 ('a-spec-review', 'wi-fixture', 's-unknown', None, 'a-spec', 5, 'closed'),
+                # A later review is the successor after the adverse review.
+                ('a-retry', 'wi-fixture', 's-unknown', 'reviewer', 'a-coder', 9, 'closed'),
                 # No archetype, role, or review link remains Unlabelled.
                 ('a-unknown', 'wi-fixture', 's-unknown', None, None, 6, 'closed'),
             ],
@@ -73,6 +75,10 @@ class ArchetypeClassificationTest(unittest.TestCase):
                 (5, 'a-spec-review', 's-review-spec', None, 'delivered', 90, 100),
                 (6, 'a-unknown', 's-unknown', None, 'delivered', 110, 120),
             ],
+        )
+        connection.execute(
+            'INSERT INTO attests VALUES (?, ?, ?, ?, ?)',
+            ('v-review', 'a-review', 7, 'verdict', 'changes-requested'),
         )
         connection.commit()
         connection.close()
@@ -94,8 +100,10 @@ class ArchetypeClassificationTest(unittest.TestCase):
         self.assertEqual(stages['Spec review']['assignments'], 1)
         self.assertEqual(stages['Coding']['turns'], 1)
         self.assertEqual(stages['Coding']['assignments'], 2)
+        self.assertEqual(stages['Coding']['returns'], 1)
         self.assertEqual(stages['Code review']['turns'], 1)
-        self.assertEqual(stages['Code review']['assignments'], 1)
+        self.assertEqual(stages['Code review']['assignments'], 2)
+        self.assertEqual(stages['Code review']['returns'], 1)
         self.assertEqual(stages['Unlabelled']['turns'], 1)
         self.assertEqual(stages['Unlabelled']['assignments'], 1)
         self.assertEqual(item['coordinationTurns'], 1)
