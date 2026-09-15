@@ -56,7 +56,7 @@ A relative `inventoryPath` is resolved relative to the directory containing `gro
 
 ## What the diagram means
 
-Each pie is one configured work item. Its five equal sectors represent the recorded stages `Spec`, `Spec review`, `Coding`, `Code review`, and `Unlabelled`. The reader assigns stages from assignment roles and explicit review links. An assignment without a usable stage label remains `Unlabelled`; it is a data gap, not a failed task.
+Each pie is one configured work item. Its five equal sectors represent the recorded stages `Spec`, `Spec review`, `Coding`, `Code review`, and `Unlabelled`. For each turn, the reader uses the recorded session archetype when it is one of `spec-writer`, `reviewer-spec`, `coder`, or `reviewer-code`. If that archetype is unknown, it falls back to the turn's recorded role, the assignment role, and an explicit review link. An assignment without a usable stage label remains `Unlabelled`; it is a data gap, not a failed task. Orchestration and product-owner archetypes are excluded from work stages. The session archetype is current session metadata, so it is not historical proof for every turn. The reader does not infer stages from titles.
 
 Within a sector, radial distance represents the gap between directly linked turns in that recorded stage. The default log scale keeps short and long gaps visible together. The histogram opacity is the count in each duration bin relative to the fullest bin in that sector. Review returns control the blue-to-red color scale. Striped outer rims count gaps beyond the selected duration limit. The legend bands are illustrative guides, not measurements.
 
@@ -67,8 +67,9 @@ A timing gap can include legitimate work elsewhere and does not establish a stal
 The current reader expects these SQLite objects and columns:
 
 - `work_items`: `id`, `title`, `state`, `createdAt`
-- `assignments`: `id`, `workItemId`, `holderRole`, `reviewsAssignmentId`, `openedAt`, `state`
-- `turns`: `seq`, `assignmentId`, `status`, `startedAt`, `endedAt`
+- `sessions`: `sessionKey`, `archetype`
+- `assignments`: `id`, `workItemId`, `holderKey`, `holderRole`, `reviewsAssignmentId`, `openedAt`, `state`
+- `turns`: `seq`, `assignmentId`, `sessionKey`, `roleRef`, `status`, `startedAt`, `endedAt`
 - `attests`: `id`, `assignmentId`, `ts`, `kind`, `verdictKind`
 
 It reads verdicts where `kind` is `verdict` and `verdictKind` is `changes-requested`. The query shape is tied to this schema family; a schema migration or an older database with different names may require a reader update. The server applies `PRAGMA query_only=ON`, uses a read-only SQLite URI, and closes each bounded read without committing anything.
