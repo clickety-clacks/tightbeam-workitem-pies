@@ -37,7 +37,12 @@ class ArchetypeClassificationTest(unittest.TestCase):
         ''')
         connection.executemany(
             'INSERT INTO work_items VALUES (?, ?, ?, ?)',
-            [('wi-fixture', 'Fixture item', 'open', 1)],
+            [
+                ('wi-fixture', 'Fixture item', 'open', 1),
+                ('wi-single', 'Single archetype', 'open', 2),
+                ('wi-two', 'Two archetypes', 'open', 3),
+                ('wi-empty', 'Empty item', 'open', 4),
+            ],
         )
         connection.executemany(
             'INSERT INTO sessions VALUES (?, ?)',
@@ -45,8 +50,10 @@ class ArchetypeClassificationTest(unittest.TestCase):
                 ('s-spec', 'spec-writer'),
                 ('s-coder', 'coder'),
                 ('s-review-spec', 'reviewer-spec'),
+                ('s-review-code', 'reviewer-code'),
                 ('s-orchestrator', 'orchestrator'),
                 ('s-unknown', 'default'),
+                ('s-missing', None),
             ],
         )
         connection.executemany(
@@ -57,12 +64,16 @@ class ArchetypeClassificationTest(unittest.TestCase):
                 # The holder is a coder, but its turn is performed by an orchestrator.
                 ('a-supervised', 'wi-fixture', 's-coder', 'coder', None, 3, 'closed'),
                 # Unknown holder archetype plus an explicit review link falls back to Code review.
-                ('a-review', 'wi-fixture', 's-unknown', 'reviewer', 'a-coder', 4, 'closed'),
-                ('a-spec-review', 'wi-fixture', 's-unknown', None, 'a-spec', 5, 'closed'),
+                ('a-review', 'wi-fixture', 's-missing', 'reviewer', 'a-coder', 4, 'closed'),
+                ('a-spec-review', 'wi-fixture', 's-review-spec', None, 'a-spec', 5, 'closed'),
                 # A later review is the successor after the adverse review.
-                ('a-retry', 'wi-fixture', 's-unknown', 'reviewer', 'a-coder', 9, 'closed'),
-                # No archetype, role, or review link remains Unlabelled.
-                ('a-unknown', 'wi-fixture', 's-unknown', None, None, 6, 'closed'),
+                ('a-retry', 'wi-fixture', 's-missing', 'reviewer', 'a-coder', 9, 'closed'),
+                # No archetype, role, or review link remains Unknown.
+                ('a-unknown', 'wi-fixture', 's-missing', None, None, 6, 'closed'),
+                ('a-default', 'wi-fixture', 's-unknown', None, None, 7, 'closed'),
+                ('a-single', 'wi-single', 's-coder', None, None, 10, 'closed'),
+                ('a-two-coder', 'wi-two', 's-coder', None, None, 11, 'closed'),
+                ('a-two-review', 'wi-two', 's-review-code', None, None, 12, 'closed'),
             ],
         )
         connection.executemany(
@@ -71,9 +82,13 @@ class ArchetypeClassificationTest(unittest.TestCase):
                 (1, 'a-spec', 's-spec', None, 'delivered', 10, 20),
                 (2, 'a-coder', 's-coder', None, 'delivered', 30, 40),
                 (3, 'a-supervised', 's-orchestrator', 'coder', 'delivered', 50, 60),
-                (4, 'a-review', 's-unknown', None, 'delivered', 70, 80),
+                (4, 'a-review', 's-missing', None, 'delivered', 70, 80),
                 (5, 'a-spec-review', 's-review-spec', None, 'delivered', 90, 100),
-                (6, 'a-unknown', 's-unknown', None, 'delivered', 110, 120),
+                (6, 'a-unknown', 's-missing', None, 'delivered', 110, 120),
+                (7, 'a-default', 's-unknown', None, 'delivered', 130, 140),
+                (8, 'a-single', 's-coder', None, 'delivered', 150, 160),
+                (9, 'a-two-coder', 's-coder', None, 'delivered', 170, 180),
+                (10, 'a-two-review', 's-review-code', None, 'delivered', 190, 200),
             ],
         )
         connection.execute(
@@ -84,28 +99,45 @@ class ArchetypeClassificationTest(unittest.TestCase):
         connection.close()
         self.groups.write_text(json.dumps({
             'source': 'fixture',
-            'items': [{'id': 'wi-fixture', 'group': 'Fixture'}],
+            'items': [
+                {'id': 'wi-fixture', 'group': 'Fixture'},
+                {'id': 'wi-single', 'group': 'Fixture'},
+                {'id': 'wi-two', 'group': 'Fixture'},
+                {'id': 'wi-empty', 'group': 'Fixture'},
+            ],
         }))
 
     def tearDown(self):
         self.tempdir.cleanup()
 
     def test_turn_archetype_wins_and_fallbacks_stay_explicit(self):
-        item = read_snapshot(self.db, self.groups)['items'][0]
+        snapshot = read_snapshot(self.db, self.groups)
+        items = {item['id']: item for item in snapshot['items']}
+        self.assertEqual(
+            snapshot['archetypes'],
+            ['coder', 'default', 'orchestrator', 'reviewer-code', 'reviewer-spec', 'spec-writer', 'Unknown'],
+        )
+        self.assertEqual(items['wi-empty']['stages'], [])
+        self.assertEqual([s['name'] for s in items['wi-single']['stages']], ['coder'])
+        self.assertEqual([s['name'] for s in items['wi-two']['stages']], ['coder', 'reviewer-code'])
+
+        item = items['wi-fixture']
         stages = {stage['name']: stage for stage in item['stages']}
 
-        self.assertEqual(stages['Spec']['turns'], 1)
-        self.assertEqual(stages['Spec']['assignments'], 1)
-        self.assertEqual(stages['Spec review']['turns'], 1)
-        self.assertEqual(stages['Spec review']['assignments'], 1)
-        self.assertEqual(stages['Coding']['turns'], 1)
-        self.assertEqual(stages['Coding']['assignments'], 2)
-        self.assertEqual(stages['Coding']['returns'], 1)
-        self.assertEqual(stages['Code review']['turns'], 1)
-        self.assertEqual(stages['Code review']['assignments'], 2)
-        self.assertEqual(stages['Code review']['returns'], 1)
-        self.assertEqual(stages['Unlabelled']['turns'], 1)
-        self.assertEqual(stages['Unlabelled']['assignments'], 1)
+        self.assertEqual(stages['spec-writer']['turns'], 1)
+        self.assertEqual(stages['spec-writer']['assignments'], 1)
+        self.assertEqual(stages['reviewer-spec']['turns'], 1)
+        self.assertEqual(stages['reviewer-spec']['assignments'], 1)
+        self.assertEqual(stages['coder']['turns'], 1)
+        self.assertEqual(stages['coder']['assignments'], 2)
+        self.assertEqual(stages['coder']['returns'], 1)
+        self.assertEqual(stages['orchestrator']['turns'], 1)
+        self.assertEqual(stages['orchestrator']['assignments'], 0)
+        self.assertEqual(stages['default']['turns'], 1)
+        self.assertEqual(stages['default']['assignments'], 1)
+        self.assertEqual(stages['Unknown']['turns'], 2)
+        self.assertEqual(stages['Unknown']['assignments'], 3)
+        self.assertEqual(stages['Unknown']['returns'], 1)
         self.assertEqual(item['coordinationTurns'], 1)
 
 

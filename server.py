@@ -11,74 +11,27 @@ import time
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
-STAGES = ['Spec', 'Spec review', 'Coding', 'Code review', 'Unlabelled']
-ARCHETYPE_STAGES = {
-    'spec-writer': 'Spec',
-    'reviewer-spec': 'Spec review',
-    'coder': 'Coding',
-    'reviewer-code': 'Code review',
-}
-ROLE_STAGES = ARCHETYPE_STAGES
+UNKNOWN_ARCHETYPE = 'Unknown'
 COORDINATION_ARCHETYPES = frozenset({'orchestrator', 'product-owner'})
-COORDINATION_ROLES = COORDINATION_ARCHETYPES
 
 
-def _role_name(value):
-    return str(value or '').split(':', 1)[0].strip().lower()
+def _archetype_name(value):
+    value = str(value or '').strip()
+    return value or UNKNOWN_ARCHETYPE
 
 
-def _stage_for_identity(value):
-    name = _role_name(value)
-    if name in ARCHETYPE_STAGES:
-        return ARCHETYPE_STAGES[name]
-    if name in COORDINATION_ARCHETYPES:
-        return 'Coordination'
-    return None
-
-
-def _stage_for_role(value):
-    name = _role_name(value)
-    if name in ROLE_STAGES:
-        return ROLE_STAGES[name]
-    if name in COORDINATION_ROLES:
-        return 'Coordination'
-    return None
+def archetype_sort_key(name):
+    return (name == UNKNOWN_ARCHETYPE, name.casefold(), name)
 
 
 def classify_assignments(assignments):
-    """Classify assignments from holder identity, then recorded role/link data."""
-    by_id = {a['id']: a for a in assignments}
-    memo = {}
-
-    def classify(assignment, active=()):
-        assignment_id = assignment['id']
-        if assignment_id in memo:
-            return memo[assignment_id]
-        if assignment_id in active:
-            return 'Unlabelled'
-        stage = _stage_for_identity(assignment.get('holderArchetype'))
-        if stage is None:
-            stage = _stage_for_role(assignment.get('holderRole'))
-        if stage is None and assignment.get('reviewsAssignmentId'):
-            producer = by_id.get(assignment['reviewsAssignmentId'])
-            producer_stage = classify(producer, active + (assignment_id,)) if producer else None
-            if producer_stage == 'Spec':
-                stage = 'Spec review'
-            elif producer_stage == 'Coding':
-                stage = 'Code review'
-        stage = stage or 'Unlabelled'
-        memo[assignment_id] = stage
-        return stage
-
-    return {assignment_id: classify(assignment) for assignment_id, assignment in by_id.items()}
+    """Use the holder session archetype, or an explicit Unknown marker."""
+    return {a['id']: _archetype_name(a.get('holderArchetype')) for a in assignments}
 
 
-def classify_turn(turn, assignment_stages):
-    """Use the turn's session archetype before assignment fallbacks."""
-    stage = _stage_for_identity(turn.get('sessionArchetype'))
-    if stage is None:
-        stage = _stage_for_role(turn.get('roleRef'))
-    return stage or assignment_stages.get(turn.get('assignmentId'), 'Unlabelled')
+def classify_turn(turn, _assignment_archetypes):
+    """Use the turn's session archetype, or an explicit Unknown marker."""
+    return _archetype_name(turn.get('sessionArchetype'))
 
 
 def read_snapshot(db_path, groups_path):
@@ -122,11 +75,11 @@ def read_snapshot(db_path, groups_path):
         c.rollback()
         c.close()
     by_id = {a['id']: a for a in assignments}
-    assignment_stages = classify_assignments(assignments)
+    assignment_archetypes = classify_assignments(assignments)
     by_item = defaultdict(list)
     successors = defaultdict(list)
     for a in assignments:
-        a['stage'] = assignment_stages[a['id']]
+        a['archetype'] = assignment_archetypes[a['id']]
         by_item[a['workItemId']].append(a)
         if a['reviewsAssignmentId']:
             successors[a['reviewsAssignmentId']].append(a)
@@ -138,15 +91,24 @@ def read_snapshot(db_path, groups_path):
     for aid, v in adverse.items():
         a = by_id[aid]
         producer = by_id.get(a['reviewsAssignmentId'])
-        if not producer or producer['stage'] not in ('Spec', 'Coding'):
+        if not producer:
             continue
-        counts[a['workItemId']][producer['stage']] += 1
-        if any(r['openedAt'] > v['ts'] for r in successors[producer['id']]):
-            counts[a['workItemId']][a['stage']] += 1
+        counts[a['workItemId']][producer['archetype']] += 1
+        later_reviews = sorted(
+            (r for r in successors[producer['id']] if r['openedAt'] > v['ts']),
+            key=lambda r: (r['openedAt'], r['id']),
+        )
+        if later_reviews:
+            counts[a['workItemId']][later_reviews[0]['archetype']] += 1
     item_turns = defaultdict(list)
     for t in turns:
-        t['stage'] = classify_turn(t, assignment_stages)
+        t['archetype'] = classify_turn(t, assignment_archetypes)
         item_turns[by_id[t['assignmentId']]['workItemId']].append(t)
+    archetypes = sorted(
+        {a['archetype'] for a in assignments}
+        | {t['archetype'] for t in turns},
+        key=archetype_sort_key,
+    )
     for item in items:
         wi = item['id']
         item['group'] = membership[wi]
@@ -156,22 +118,27 @@ def read_snapshot(db_path, groups_path):
         item['runningTurns'] = sum(t['status'] == 'running' for t in its_turns)
         item['queuedTurns'] = sum(t['status'] == 'queued' for t in its_turns)
         item['openAssignments'] = sum(a['state'] == 'open' for a in by_item[wi])
-        item['coordinationTurns'] = sum(t['stage'] == 'Coordination' for t in its_turns)
-        for name in STAGES:
-            rows = sorted((t for t in its_turns if t['stage'] == name and t['startedAt'] is not None), key=lambda t:(t['startedAt'],t['seq']))
+        item['coordinationTurns'] = sum(t['archetype'] in COORDINATION_ARCHETYPES for t in its_turns)
+        item_archetypes = sorted(
+            {a['archetype'] for a in by_item[wi]}
+            | {t['archetype'] for t in its_turns},
+            key=archetype_sort_key,
+        )
+        for name in item_archetypes:
+            rows = sorted((t for t in its_turns if t['archetype'] == name and t['startedAt'] is not None), key=lambda t:(t['startedAt'],t['seq']))
             gaps, excluded = [], 0
             for prev, cur in zip(rows, rows[1:]):
                 if prev['endedAt'] is None or prev['status'] not in ('delivered','failed') or cur['startedAt'] < prev['endedAt']:
                     excluded += 1
                 else:
                     gaps.append((cur['startedAt'] - prev['endedAt']) / 1000)
-            item['stages'].append({'name':name,'returns':None if name=='Unlabelled' else counts[wi][name],
+            item['stages'].append({'name':name,'archetype':name,'returns':counts[wi][name],
                 'gaps':gaps,'turns':len(rows),'excluded':excluded,
-                'assignments':sum(a['stage']==name for a in by_item[wi])})
+                'assignments':sum(a['archetype']==name for a in by_item[wi])})
     return {'capturedAt':dt.datetime.now(dt.timezone.utc).isoformat(), 'readMs':round((time.monotonic()-started)*1000),
         'groupSource':groups['source'],'missingIds':sorted(set(ids)-{i['id'] for i in items}),
-        'stages':STAGES,'items':items,'assignmentCount':len(assignments),
-        'unlabelledAssignments':sum(a['stage']=='Unlabelled' for a in assignments)}
+        'archetypes':archetypes,'stages':archetypes,'items':items,'assignmentCount':len(assignments),
+        'unlabelledAssignments':sum(a['archetype']==UNKNOWN_ARCHETYPE for a in assignments)}
 
 
 class Cache:

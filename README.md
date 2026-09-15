@@ -56,9 +56,9 @@ A relative `inventoryPath` is resolved relative to the directory containing `gro
 
 ## What the diagram means
 
-Each pie is one configured work item. Its five equal sectors represent the recorded stages `Spec`, `Spec review`, `Coding`, `Code review`, and `Unlabelled`. For each turn, the reader uses the recorded session archetype when it is one of `spec-writer`, `reviewer-spec`, `coder`, or `reviewer-code`. If that archetype is unknown, it falls back to the turn's recorded role, the assignment role, and an explicit review link. An assignment without a usable stage label remains `Unlabelled`; it is a data gap, not a failed task. Orchestration and product-owner archetypes are excluded from work stages. The session archetype is current session metadata, so it is not historical proof for every turn. The reader does not infer stages from titles.
+Each pie is one configured work item. Its sectors are the archetypes present in that item's assignments or turns, in one deterministic global order. A turn uses its recorded session archetype. Assignment and review counts use the holder session archetype. Missing archetypes appear as `Unknown`; an item with no assignments or turns is an empty outline. The session archetype is current metadata, so it is not historical proof for every turn. The reader does not infer attribution from titles or silently discard coordination archetypes.
 
-Within a sector, radial distance represents the gap between directly linked turns in that recorded stage. The default log scale keeps short and long gaps visible together. The histogram opacity is the count in each duration bin relative to the fullest bin in that sector. Review returns control the blue-to-red color scale. Striped outer rims count gaps beyond the selected duration limit. The legend bands are illustrative guides, not measurements.
+Within a sector, radial distance represents the gap between directly linked turns in that recorded archetype. The default log scale keeps short and long gaps visible together. The histogram opacity is the count in each duration bin relative to the fullest bin in that sector. Review returns control the blue-to-red color scale. Striped outer rims count gaps beyond the selected duration limit. The legend shows an illustrative archetype example; its bands are guides, not measurements.
 
 A timing gap can include legitimate work elsewhere and does not establish a stall, idle time, current stage, or completion percentage. The database does not record enough information to claim the current stage or percentage complete, so the view does not infer either.
 
@@ -76,6 +76,6 @@ It reads verdicts where `kind` is `verdict` and `verdictKind` is `changes-reques
 
 ## Controls and refresh
 
-The page refreshes live data every 15 seconds while visible. A failed read keeps the last view and marks it stale. Search and recorded-state filters work on the configured inventory. Hovering or focusing a pie shows its recorded stage labels; a short hover dwell expands the pie, and clicking opens its recorded item details.
+The page refreshes live data every 15 seconds while visible. A failed read keeps the last view and marks it stale. Search and recorded-state filters work on the configured inventory. Hovering or focusing a pie shows its recorded archetype labels; a short hover dwell expands the pie, and clicking opens its recorded item details.
 
 The right control rail provides knobs for circle radius, review-return color range, maximum gap duration, histogram bands, and hover dwell. Log radius can be disabled for a linear duration scale. Theme supports Auto, Light, and Dark; Auto follows the system preference, while an explicit choice is kept in browser storage for that origin.
