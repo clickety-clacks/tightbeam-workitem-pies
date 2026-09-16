@@ -50,7 +50,9 @@ def _release_record(record):
     if status not in RELEASE_STATUSES:
         status = 'Scope unresolved'
     checked_at = record.get('checkedAt')
-    return status, None if checked_at is None else str(checked_at)
+    scope = record.get('scope')
+    return (status, None if checked_at is None else str(checked_at),
+            None if scope is None else str(scope))
 
 
 def read_snapshot(db_path, groups_path):
@@ -61,7 +63,8 @@ def read_snapshot(db_path, groups_path):
         inventory_path = Path(groups['inventoryPath']).expanduser()
         if not inventory_path.is_absolute():
             inventory_path = groups_path.parent / inventory_path
-        inventory = json.loads(inventory_path.resolve().read_text())
+        inventory_data = json.loads(inventory_path.resolve().read_text())
+        inventory = inventory_data.get('items', []) if isinstance(inventory_data, dict) else inventory_data
         membership = {r['id']: r.get('category', 'Ungrouped') for r in inventory}
         descriptions = {r['id']: _description_record(r, 'Inventory summary') for r in inventory}
         release_records = {r['id']: _release_record(r) for r in inventory}
@@ -137,8 +140,8 @@ def read_snapshot(db_path, groups_path):
         item['group'] = membership[wi]
         item['description'], item['descriptionSource'] = descriptions.get(
             wi, ('No description recorded', 'No description recorded'))
-        item['releaseStatus'], item['checkedAt'] = release_records.get(
-            wi, ('Scope unresolved', None))
+        item['releaseStatus'], item['checkedAt'], item['scope'] = release_records.get(
+            wi, ('Scope unresolved', None, None))
         item['stages'] = []
         its_turns = item_turns[wi]
         item['lastActivity'] = max((t['endedAt'] or t['startedAt'] or 0 for t in its_turns), default=0)

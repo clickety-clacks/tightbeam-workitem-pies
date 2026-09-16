@@ -54,7 +54,7 @@ For an existing inventory file, use `inventoryPath` instead. It points to a JSON
 
 A relative `inventoryPath` is resolved relative to the directory containing `groups.json`. Tilde paths are expanded. The example file contains only an obvious placeholder and is not a demo dataset.
 
-Inventory records may also include `releaseStatus` (`Remaining`, `Landed`, `Standing ownership`, `Scope unresolved`, or `Excluded`) and `checkedAt`. These are curated release records kept separate from the database's work-item `state`; missing or unrecognized values appear as `Scope unresolved`.
+Inventory records may also include `releaseStatus` (`Remaining`, `Landed`, or `Excluded`), `scope`, and `checkedAt`. These are curated release records kept separate from the database's work-item `state`. `Remaining` includes held or unverified included work. `Landed` means source delivered, not release acceptance. `Excluded` covers work outside the committed scope. Older `Standing ownership` and `Scope unresolved` values remain in the Needs attention bucket for compatibility; missing or unrecognized values do too.
 
 ## What the diagram means
 
@@ -78,7 +78,7 @@ It reads verdicts where `kind` is `verdict` and `verdictKind` is `changes-reques
 
 ## Controls and refresh
 
-The page refreshes live data every 15 seconds while visible. A failed read keeps the last view and marks it stale. Search, recorded-state, and release-record filters work on the configured inventory; the release filter defaults to all release records. Hovering or focusing a pie shows its recorded archetype labels; a short hover dwell expands the pie, and clicking opens its recorded item details.
+The page refreshes live data every 15 seconds while visible. A failed read keeps the last view and marks it stale. Search and recorded-state filters work on the configured inventory. The release-record filter defaults to Needs attention and also offers All release records, Source delivered, and Outside committed scope. Hovering or focusing a pie shows its recorded archetype labels; a short hover dwell expands the pie, and clicking opens its recorded item details.
 
 Clicking either the compact or expanded pie opens the full work-item title, its ID, and an inventory description. The description comes from an inventory record's `summary` (or a direct groups entry's `summary`/`description`) and is labeled as an inventory description, not live status. Items without one show `No description recorded`; the database does not provide a description column.
 

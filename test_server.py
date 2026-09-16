@@ -101,7 +101,7 @@ class ArchetypeClassificationTest(unittest.TestCase):
             'source': 'fixture',
             'items': [
                 {'id': 'wi-fixture', 'group': 'Fixture', 'summary': 'Direct summary <unsafe>',
-                 'releaseStatus': 'Landed', 'checkedAt': '2026-09-15'},
+                 'releaseStatus': 'Landed', 'checkedAt': '2026-09-15', 'scope': 'Included'},
                 {'id': 'wi-single', 'group': 'Fixture', 'description': 'Direct description',
                  'releaseStatus': 'Remaining'},
                 {'id': 'wi-two', 'group': 'Fixture', 'releaseStatus': 'invalid'},
@@ -128,10 +128,12 @@ class ArchetypeClassificationTest(unittest.TestCase):
         self.assertEqual(items['wi-two']['descriptionSource'], 'No description recorded')
         self.assertEqual(items['wi-fixture']['releaseStatus'], 'Landed')
         self.assertEqual(items['wi-fixture']['checkedAt'], '2026-09-15')
+        self.assertEqual(items['wi-fixture']['scope'], 'Included')
         self.assertEqual(items['wi-single']['releaseStatus'], 'Remaining')
         self.assertIsNone(items['wi-single']['checkedAt'])
         self.assertEqual(items['wi-two']['releaseStatus'], 'Scope unresolved')
         self.assertIsNone(items['wi-empty']['checkedAt'])
+        self.assertIsNone(items['wi-empty']['scope'])
         self.assertEqual([s['name'] for s in items['wi-single']['stages']], ['coder'])
         self.assertEqual([s['name'] for s in items['wi-two']['stages']], ['coder', 'reviewer-code'])
 
@@ -157,11 +159,12 @@ class ArchetypeClassificationTest(unittest.TestCase):
     def test_inventory_summary_is_the_display_description(self):
         root = Path(self.tempdir.name)
         inventory = root / 'inventory.json'
-        inventory.write_text(json.dumps([
+        inventory.write_text(json.dumps({'items': [
             {'id': 'wi-fixture', 'category': 'Fixture', 'summary': 'Inventory summary',
-             'releaseStatus': 'Standing ownership', 'checkedAt': '2026-09-14T12:00:00Z'},
+             'releaseStatus': 'Standing ownership', 'checkedAt': '2026-09-14T12:00:00Z',
+             'scope': 'Included'},
             {'id': 'wi-empty', 'category': 'Fixture'},
-        ]))
+        ]}))
         groups = root / 'inventory-groups.json'
         groups.write_text(json.dumps({
             'source': 'inventory fixture',
@@ -173,6 +176,7 @@ class ArchetypeClassificationTest(unittest.TestCase):
         self.assertEqual(items['wi-fixture']['descriptionSource'], 'Inventory summary')
         self.assertEqual(items['wi-fixture']['releaseStatus'], 'Standing ownership')
         self.assertEqual(items['wi-fixture']['checkedAt'], '2026-09-14T12:00:00Z')
+        self.assertEqual(items['wi-fixture']['scope'], 'Included')
         self.assertEqual(items['wi-empty']['description'], 'No description recorded')
         self.assertEqual(items['wi-empty']['releaseStatus'], 'Scope unresolved')
 
